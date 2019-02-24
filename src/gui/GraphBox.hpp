@@ -140,6 +140,7 @@ private:
 	void event_normal_font_size();
 	void event_arrange();
 	void event_show_properties();
+	void event_show_nodelist();
 	void event_show_engine();
 	void event_clipboard_changed(GdkEventOwnerChange* ev);
 
@@ -185,6 +186,7 @@ private:
 	Gtk::MenuItem*      _menu_view_engine_window;
 	Gtk::MenuItem*      _menu_view_control_window;
 	Gtk::MenuItem*      _menu_view_graph_properties;
+	Gtk::MenuItem*      _menu_view_nodelist; // Edit: han-so1omon
 	Gtk::MenuItem*      _menu_view_messages_window;
 	Gtk::MenuItem*      _menu_view_graph_tree_window;
 	Gtk::MenuItem*      _menu_help_about;

@@ -1,0 +1,15 @@
+Add numbers to tree of nodes in front of nodes
+Add numbers to nodes in front of options
+Add selection and manipulation dynamics with key presses
+  <num> + n <- select node <num>
+  <num> + o <- select option <num> of current node
+    j <- decrease option level
+    <shift> + j <- fully decrease option level
+    w + j <- quickly decrease option level
+    k <- increase option level
+    w + k <- quickly increase option level
+    <shift> + k <- fully increase option level
+  <num1> + / + <num2> + / + <num3> + / <num4> + c <- connect node:option
+    <num1>:<num2> to <num3>:<num4>
+
+Documentation of changes

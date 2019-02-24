@@ -40,6 +40,7 @@ class LoadGraphWindow;
 class LoadPluginWindow;
 class NewSubgraphWindow;
 class PropertiesWindow;
+class NodelistWindow;
 class RenameWindow;
 
 /** Manager/Factory for all windows.
@@ -70,6 +71,7 @@ public:
 	void present_new_subgraph(SPtr<const client::GraphModel> graph, Properties data=Properties());
 	void present_rename(SPtr<const client::ObjectModel> object);
 	void present_properties(SPtr<const client::ObjectModel> object);
+	void present_nodelist(SPtr<const client::ObjectModel> object);
 
 	bool remove_graph_window(GraphWindow* win, GdkEventAny* ignored = nullptr);
 
@@ -90,6 +92,7 @@ private:
 	LoadGraphWindow*   _load_graph_win;
 	NewSubgraphWindow* _new_subgraph_win;
 	PropertiesWindow*  _properties_win;
+	NodelistWindow*    _nodelist_win;
 	RenameWindow*      _rename_win;
 };
 

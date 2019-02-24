@@ -27,6 +27,7 @@
 #include "GraphView.hpp"
 #include "GraphWindow.hpp"
 #include "PropertiesWindow.hpp"
+#include "NodelistWindow.hpp"
 #include "RenameWindow.hpp"
 #include "WidgetFactory.hpp"
 #include "WindowFactory.hpp"
@@ -44,15 +45,17 @@ WindowFactory::WindowFactory(App& app)
 	, _load_graph_win(nullptr)
 	, _new_subgraph_win(nullptr)
 	, _properties_win(nullptr)
+  , _nodelist_win(nullptr)
 {
 	WidgetFactory::get_widget_derived("load_plugin_win", _load_plugin_win);
 	WidgetFactory::get_widget_derived("load_graph_win", _load_graph_win);
 	WidgetFactory::get_widget_derived("new_subgraph_win", _new_subgraph_win);
 	WidgetFactory::get_widget_derived("properties_win", _properties_win);
+	WidgetFactory::get_widget_derived("nodelist_win", _nodelist_win);
 	WidgetFactory::get_widget_derived("rename_win", _rename_win);
 
 	if (!(_load_plugin_win && _load_graph_win && _new_subgraph_win
-	      && _properties_win && _rename_win)) {
+	      && _properties_win && && nodelist_win && _rename_win)) {
 		throw std::runtime_error("failed to load window widgets\n");
 	}
 
@@ -60,6 +63,7 @@ WindowFactory::WindowFactory(App& app)
 	_load_graph_win->init(app);
 	_new_subgraph_win->init_window(app);
 	_properties_win->init_window(app);
+	_nodelist_win->init_window(app);
 	_rename_win->init_window(app);
 }
 
@@ -296,6 +300,24 @@ WindowFactory::present_properties(SPtr<const ObjectModel> object)
 	}
 
 	_properties_win->present(object);
+}
+
+void
+WindowFactory::present_nodelist(SPtr<const ObjectModel> object)
+{
+	auto w = _graph_windows.find(object->path());
+	if (w == _graph_windows.end()) {
+		w = _graph_windows.find(object->path().parent());
+	}
+	if (w == _graph_windows.end()) {
+		w = _graph_windows.find(object->path().parent().parent());
+	}
+
+	if (w != _graph_windows.end()) {
+		_nodelist_win->set_transient_for(*w->second);
+	}
+
+	_nodelist_win->present(object);
 }
 
 } // namespace gui

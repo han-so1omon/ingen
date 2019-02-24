@@ -89,6 +89,7 @@ GraphBox::GraphBox(BaseObjectType*                   cobject,
 	xml->get_widget("graph_view_control_window_menuitem", _menu_view_control_window);
 	xml->get_widget("graph_view_engine_window_menuitem", _menu_view_engine_window);
 	xml->get_widget("graph_properties_menuitem", _menu_view_graph_properties);
+	xml->get_widget("graph_nodelist_menuitem", _menu_view_graph_nodelist);
 	xml->get_widget("graph_parent_menuitem", _menu_parent);
 	xml->get_widget("graph_refresh_menuitem", _menu_refresh);
 	xml->get_widget("graph_fullscreen_menuitem", _menu_fullscreen);
@@ -175,6 +176,8 @@ GraphBox::GraphBox(BaseObjectType*                   cobject,
 		sigc::mem_fun(this, &GraphBox::event_show_engine));
 	_menu_view_graph_properties->signal_activate().connect(
 		sigc::mem_fun(this, &GraphBox::event_show_properties));
+	_menu_view_graph_nodelist->signal_activate().connect(
+		sigc::mem_fun(this, &GraphBox::event_show_nodelist));
 
 	Glib::RefPtr<Gtk::Clipboard> clipboard = Gtk::Clipboard::get();
 	clipboard->signal_owner_change().connect(
@@ -491,6 +494,12 @@ void
 GraphBox::event_show_properties()
 {
 	_app->window_factory()->present_properties(_graph);
+}
+
+void
+GraphBox::event_show_nodelist()
+{
+	_app->window_factory()->present_nodelist(_graph);
 }
 
 void
