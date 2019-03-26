@@ -66,6 +66,7 @@ def build(bld):
             LoadPluginWindow.cpp
             MessagesWindow.cpp
             NewSubgraphWindow.cpp
+            NodelistWindow.cpp
             NodeMenu.cpp
             NodeModule.cpp
             ObjectMenu.cpp

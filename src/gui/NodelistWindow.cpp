@@ -44,52 +44,26 @@ typedef std::set<URI> URISet;
 NodelistWindow::NodelistWindow(BaseObjectType*                   cobject,
                                const Glib::RefPtr<Gtk::Builder>& xml)
 	: Window(cobject)
-	, _value_type(0)
 {
 	xml->get_widget("nodelist_vbox", _vbox);
-	xml->get_widget("nodelist_scrolledwindow", _scrolledwindow);
-	xml->get_widget("nodelist_table", _table);
-	xml->get_widget("nodelist_key_combo", _key_combo);
-	xml->get_widget("nodelist_value_bin", _value_bin);
-	xml->get_widget("nodelist_add_button", _add_button);
-	xml->get_widget("nodelist_cancel_button", _cancel_button);
-	xml->get_widget("nodelist_apply_button", _apply_button);
 	xml->get_widget("nodelist_ok_button", _ok_button);
+	xml->get_widget("nodelist_treeview", _tree_view);
 
-	_key_store = Gtk::ListStore::create(_combo_columns);
-	_key_combo->set_model(_key_store);
-	_key_combo->pack_start(_combo_columns.label_col);
+  //TODO connect these to node list
+  _node_store = Gtk::ListStore::create(_model_columns);
+  _tree_view->set_model(_node_store);
+  _tree_view->append_column("_ID", _model_columns._col_id);
+  _tree_view->append_column("_Name", _model_columns._col_name);
 
-	_key_combo->signal_changed().connect(
-		sigc::mem_fun(this, &NodelistWindow::key_changed));
-
-	_add_button->signal_clicked().connect(
-		sigc::mem_fun(this, &NodelistWindow::add_clicked));
-
-	_cancel_button->signal_clicked().connect(
-		sigc::mem_fun(this, &NodelistWindow::cancel_clicked));
-
-	_apply_button->signal_clicked().connect(
-		sigc::mem_fun(this, &NodelistWindow::apply_clicked));
+	// This could be nicer.. store the TreeViewColumns locally maybe?
+	_tree_view->get_column(0)->set_sort_column(_model_columns._col_id);
+	_tree_view->get_column(1)->set_sort_column(_model_columns._col_name);
+	for (int i = 0; i < 2; ++i) {
+		_tree_view->get_column(i)->set_resizable(true);
+	}
 
 	_ok_button->signal_clicked().connect(
 		sigc::mem_fun(this, &NodelistWindow::ok_clicked));
-}
-
-void
-NodelistWindow::reset()
-{
-	_node_connection.disconnect();
-	_node_removed_connection.disconnect();
-
-	_key_store->clear();
-	_records.clear();
-
-	_model.reset();
-
-	_table->children().clear();
-	_table->resize(1, 3);
-	_table->property_n_rows() = 1;
 }
 
 void
@@ -97,51 +71,6 @@ NodelistWindow::present(SPtr<const ObjectModel> model)
 {
 	set_object(model);
 	Gtk::Window::present();
-}
-
-void
-NodelistWindow::add_node(const URI& key, const Atom& value)
-{
-	World* world = _app->world();
-
-	const unsigned n_rows = _table->property_n_rows() + 1;
-	_table->property_n_rows() = n_rows;
-
-	// Column 0: Property
-	LilvNode*   prop = lilv_new_uri(world->lilv_world(), key.c_str());
-	std::string name = rdfs::label(world, prop);
-	if (name.empty()) {
-		name = world->rdf_world()->prefixes().qualify(key);
-	}
-	Gtk::Label* label = new Gtk::Label(
-	        std::string("<a href=\"") + key.string() + "\">" + name + "</a>",
-	        1.0,
-	        0.5);
-	label->set_use_markup(true);
-	_app->set_tooltip(label, prop);
-	_table->attach(*Gtk::manage(label), 0, 1, n_rows, n_rows + 1,
-	               Gtk::FILL|Gtk::SHRINK, Gtk::SHRINK);
-
-	// Column 1: Value
-	Gtk::Alignment*   align      = manage(new Gtk::Alignment(0.0, 0.5, 1.0, 1.0));
-	Gtk::CheckButton* present    = manage(new Gtk::CheckButton());
-	const char*       type       = _app->world()->uri_map().unmap_uri(value.type());
-	Gtk::Widget*      val_widget = create_value_widget(key, type, value);
-
-	present->set_active();
-	if (val_widget) {
-		align->add(*Gtk::manage(val_widget));
-		_app->set_tooltip(val_widget, prop);
-	}
-
-	_table->attach(*align, 1, 2, n_rows, n_rows + 1,
-	               Gtk::FILL|Gtk::EXPAND, Gtk::SHRINK);
-	_table->attach(*present, 2, 3, n_rows, n_rows + 1,
-	               Gtk::FILL, Gtk::SHRINK);
-	_records.emplace(key, Record(value, align, n_rows, present));
-	_table->show_all();
-
-	lilv_node_free(prop);
 }
 
 bool
@@ -200,7 +129,6 @@ NodelistWindow::class_supported(const rdfs::URISet& types)
 void
 NodelistWindow::set_object(SPtr<const ObjectModel> model)
 {
-	reset();
 	_model = model;
 
 	set_title(model->path() + " Nodelist - Ingen");
@@ -242,127 +170,8 @@ NodelistWindow::set_object(SPtr<const ObjectModel> model)
 		}
 	}
 
-	for (const auto& e : entries) {
-		Gtk::ListStore::iterator ki  = _key_store->append();
-		Gtk::ListStore::Row      row = *ki;
-		row[_combo_columns.uri_col]   = e.second.string();
-		row[_combo_columns.label_col] = e.first;
-	}
-
 	lilv_node_free(rdfs_DataType);
 	lilv_node_free(rdf_type);
-
-	for (const auto& p : model->properties()) {
-		add_property(p.first, p.second);
-	}
-
-	_table->show_all();
-
-	_node_connection = model->signal_property().connect(
-		sigc::mem_fun(this, &NodelistWindow::add_node));
-	_node_removed_connection = model->signal_property_removed().connect(
-		sigc::mem_fun(this, &NodelistWindow::remove_node));
-}
-
-Gtk::Widget*
-NodelistWindow::create_value_widget(const URI&  key,
-                                    const char* type_uri,
-                                    const Atom& value)
-{
-	if (!type_uri || !URI::is_valid(type_uri)) {
-		return nullptr;
-	}
-
-	URI     type(type_uri);
-	ingen::World* world  = _app->world();
-	LilvWorld*    lworld = world->lilv_world();
-
-	// See if type is a datatype we support
-	std::set<URI> types{type};
-	rdfs::datatypes(_app->world(), types, false);
-
-	URI  widget_type("urn:nothing");
-	const bool supported = datatype_supported(types, &widget_type);
-	if (supported) {
-		type = widget_type;
-		_value_type = _app->world()->uri_map().map_uri(type);
-	}
-
-	if (type == _app->uris().atom_Int) {
-		Gtk::SpinButton* widget = manage(new Gtk::SpinButton(0.0, 0));
-		widget->property_numeric() = true;
-		widget->set_range(INT_MIN, INT_MAX);
-		widget->set_increments(1, 10);
-		if (value.is_valid()) {
-			widget->set_value(value.get<int32_t>());
-		}
-		widget->signal_value_changed().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		return widget;
-	} else if (type == _app->uris().atom_Float) {
-		Gtk::SpinButton* widget = manage(new Gtk::SpinButton(0.0, 4));
-		widget->property_numeric() = true;
-		widget->set_snap_to_ticks(false);
-		widget->set_range(-FLT_MAX, FLT_MAX);
-		widget->set_increments(0.1, 1.0);
-		if (value.is_valid()) {
-			widget->set_value(value.get<float>());
-		}
-		widget->signal_value_changed().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		return widget;
-	} else if (type == _app->uris().atom_Bool) {
-		Gtk::CheckButton* widget = manage(new Gtk::CheckButton());
-		if (value.is_valid()) {
-			widget->set_active(value.get<int32_t>());
-		}
-		widget->signal_toggled().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		return widget;
-	} else if (type == _app->uris().atom_String) {
-		Gtk::Entry* widget = manage(new Gtk::Entry());
-		if (value.is_valid()) {
-			widget->set_text(value.ptr<char>());
-		}
-		widget->signal_changed().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		return widget;
-	} else if (type == _app->uris().atom_URID) {
-		const char* str = (value.is_valid()
-		                   ? world->uri_map().unmap_uri(value.get<int32_t>())
-		                   : "");
-
-		LilvNode*   pred   = lilv_new_uri(lworld, key.c_str());
-		URISet      ranges = rdfs::range(world, pred, true);
-		URIEntry*   widget = manage(new URIEntry(_app, ranges, str ? str : ""));
-		widget->signal_changed().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		lilv_node_free(pred);
-		return widget;
-	}
-
-	LilvNode*  type_node  = lilv_new_uri(lworld, type.c_str());
-	LilvNode*  rdfs_Class = lilv_new_uri(lworld, LILV_NS_RDFS "Class");
-	const bool is_class   = rdfs::is_a(world, type_node, rdfs_Class);
-	lilv_node_free(rdfs_Class);
-	lilv_node_free(type_node);
-
-	if (type == _app->uris().atom_URI ||
-	    type == _app->uris().rdfs_Class ||
-	    is_class) {
-		LilvNode*   pred   = lilv_new_uri(lworld, key.c_str());
-		URISet      ranges = rdfs::range(world, pred, true);
-		const char* str    = value.is_valid() ? value.ptr<const char>() : "";
-		URIEntry*   widget = manage(new URIEntry(_app, ranges, str));
-		widget->signal_changed().connect(
-			sigc::bind(sigc::mem_fun(this, &NodelistWindow::on_change), key));
-		lilv_node_free(pred);
-		return widget;
-	}
-
-	_app->log().error(fmt("No widget for value type %1%\n") % type);
-
-	return nullptr;
 }
 
 void
@@ -374,6 +183,29 @@ NodelistWindow::on_show()
 	int width  = 0;
 	int height = 0;
 
+  Gtk::TreeModel::Row row;
+
+  //FIXME Update node vector when nodes are added/deleted,
+  //      not here
+  auto store = _app->world()->store();
+  for (auto itr = store->begin(); itr != store->end(); itr++) {
+    auto node_str = itr->second->symbol().c_str();
+    auto search = std::find(
+      _node_instances.begin(),
+      _node_instances.end(),
+      node_str
+    );
+    if (search == _node_instances.end()) {
+      _node_instances.push_back(node_str);
+      row = *(_node_store->append());
+      row[_model_columns._col_id] = _node_num++;
+      //row[_model_columns._col_name] = itr->second->base_uri().string();
+      row[_model_columns._col_name] = node_str;
+    }
+  }
+
+  //msg << ((boost::format(" (%1%)") % plugin->human_name()).str());
+
 	for (const auto& c : _vbox->children()) {
 		const Gtk::Requisition& req = c.get_widget()->size_request();
 
@@ -381,209 +213,12 @@ NodelistWindow::on_show()
 		height += req.height + VBOX_PAD;
 	}
 
-	const Gtk::Requisition& req = _table->size_request();
-
-	width   = 1.2 * std::max(width, req.width + 128);
-	height += req.height;
-
-	set_default_size(width + WIN_PAD, height + WIN_PAD);
-	resize(width + WIN_PAD, height + WIN_PAD);
 	Gtk::Window::on_show();
-}
-
-void
-NodelistWindow::change_node(const URI& key, const Atom& value)
-{
-	auto r = _records.find(key);
-	if (r == _records.end()) {
-		add_node(key, value);
-		_table->show_all();
-		return;
-	}
-
-	Record&      record     = r->second;
-	const char*  type       = _app->world()->uri_map().unmap_uri(value.type());
-	Gtk::Widget* val_widget = create_value_widget(key, type, value);
-
-	if (val_widget) {
-		record.value_widget->remove();
-		record.value_widget->add(*Gtk::manage(val_widget));
-		val_widget->show_all();
-	}
-
-	record.value = value;
-}
-
-void
-NodelistWindow::remove_node(const URI& key, const Atom& value)
-{
-	// Bleh, there doesn't seem to be an easy way to remove a Gtk::Table row...
-	_records.clear();
-	_table->children().clear();
-	_table->resize(1, 3);
-	_table->property_n_rows() = 1;
-
-	for (const auto& p : _model->properties()) {
-		add_property(p.first, p.second);
-	}
-	_table->show_all();
-}
-
-Atom
-NodelistWindow::get_value(LV2_URID type, Gtk::Widget* value_widget)
-{
-	Forge& forge = _app->forge();
-
-	if (type == forge.Int) {
-		Gtk::SpinButton* spin = dynamic_cast<Gtk::SpinButton*>(value_widget);
-		if (spin) {
-			return _app->forge().make(spin->get_value_as_int());
-		}
-	} else if (type == forge.Float) {
-		Gtk::SpinButton* spin = dynamic_cast<Gtk::SpinButton*>(value_widget);
-		if (spin) {
-			return _app->forge().make(static_cast<float>(spin->get_value()));
-		}
-	} else if (type == forge.Bool) {
-		Gtk::CheckButton* check = dynamic_cast<Gtk::CheckButton*>(value_widget);
-		if (check) {
-			return _app->forge().make(check->get_active());
-		}
-	} else if (type == forge.URI || type == forge.URID) {
-		URIEntry* uri_entry = dynamic_cast<URIEntry*>(value_widget);
-		if (uri_entry && URI::is_valid(uri_entry->get_text())) {
-			return _app->forge().make_urid(URI(uri_entry->get_text()));
-		} else {
-			_app->log().error(fmt("Invalid URI <%1%>\n") % uri_entry->get_text());
-		}
-	} else if (type == forge.String) {
-		Gtk::Entry* entry = dynamic_cast<Gtk::Entry*>(value_widget);
-		if (entry) {
-			return _app->forge().alloc(entry->get_text());
-		}
-	}
-
-	return Atom();
-}
-
-void
-NodelistWindow::on_change(const URI& key)
-{
-	auto r = _records.find(key);
-	if (r == _records.end()) {
-		return;
-	}
-
-	Record&    record = r->second;
-	const Atom value  = get_value(record.value.type(),
-	                              record.value_widget->get_child());
-
-	if (value.is_valid()) {
-		record.value = value;
-	} else {
-		_app->log().error(fmt("Failed to get `%1%' value from widget\n") % key);
-	}
-}
-
-std::string
-NodelistWindow::active_key() const
-{
-	const Gtk::ListStore::iterator iter = _key_combo->get_active();
-	if (!iter) {
-		return "";
-	}
-
-	Glib::ustring prop_uri = (*iter)[_combo_columns.uri_col];
-	return prop_uri;
-}
-
-void
-NodelistWindow::key_changed()
-{
-	_value_bin->remove();
-	if (!_key_combo->get_active()) {
-		return;
-	}
-
-	LilvWorld*                lworld  = _app->world()->lilv_world();
-	const Gtk::ListStore::Row key_row = *(_key_combo->get_active());
-	const Glib::ustring       key_uri = key_row[_combo_columns.uri_col];
-	LilvNode*                 prop    = lilv_new_uri(lworld, key_uri.c_str());
-
-	// Try to create a value widget in the range of this property
-	const URISet ranges = rdfs::range(_app->world(), prop, true);
-	for (const auto& r : ranges) {
-		Gtk::Widget* value_widget = create_value_widget(
-			URI(key_uri), r.c_str(), Atom());
-
-		if (value_widget) {
-			_add_button->set_sensitive(true);
-			_value_bin->remove();
-			_value_bin->add(*Gtk::manage(value_widget));
-			_value_bin->show_all();
-			break;
-		}
-	}
-
-	lilv_node_free(prop);
-}
-
-void
-NodelistWindow::add_clicked()
-{
-	if (!_key_combo->get_active() || !_value_type || !_value_bin->get_child()) {
-		return;
-	}
-
-	// Get selected key URI
-	const Gtk::ListStore::Row key_row = *(_key_combo->get_active());
-	const Glib::ustring       key_uri = key_row[_combo_columns.uri_col];
-
-	// Try to get value from value widget
-	const Atom& value = get_value(_value_type, _value_bin->get_child());
-	if (value.is_valid()) {
-		// Send property to engine
-		Properties properties;
-		properties.emplace(URI(key_uri.c_str()), Property(value));
-		_app->interface()->put(_model->uri(), properties);
-	}
-}
-
-void
-NodelistWindow::cancel_clicked()
-{
-	reset();
-	Gtk::Window::hide();
-}
-
-void
-NodelistWindow::apply_clicked()
-{
-	Properties remove;
-	Properties add;
-	for (const auto& r : _records) {
-		const URI&    uri    = r.first;
-		const Record& record = r.second;
-		if (record.present_button->get_active()) {
-			if (!_model->has_property(uri, record.value)) {
-				add.emplace(uri, record.value);
-			}
-		} else {
-			remove.emplace(uri, record.value);
-		}
-	}
-
-	if (remove.empty()) {
-		_app->interface()->put(_model->uri(), add);
-	} else {
-		_app->interface()->delta(_model->uri(), remove, add);
-	}
 }
 
 void
 NodelistWindow::ok_clicked()
 {
-	apply_clicked();
 	Gtk::Window::hide();
 }
 

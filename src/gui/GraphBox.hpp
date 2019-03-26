@@ -186,7 +186,7 @@ private:
 	Gtk::MenuItem*      _menu_view_engine_window;
 	Gtk::MenuItem*      _menu_view_control_window;
 	Gtk::MenuItem*      _menu_view_graph_properties;
-	Gtk::MenuItem*      _menu_view_nodelist; // Edit: han-so1omon
+	Gtk::MenuItem*      _menu_view_graph_nodelist;
 	Gtk::MenuItem*      _menu_view_messages_window;
 	Gtk::MenuItem*      _menu_view_graph_tree_window;
 	Gtk::MenuItem*      _menu_help_about;

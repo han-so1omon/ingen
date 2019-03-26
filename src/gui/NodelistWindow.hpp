@@ -18,6 +18,8 @@
 #define INGEN_GUI_NODELIST_WINDOW_HPP
 
 #include <map>
+#include <vector>
+#include <algorithm>
 
 #include <gtkmm/alignment.h>
 #include <gtkmm/box.h>
@@ -26,11 +28,13 @@
 #include <gtkmm/checkbutton.h>
 #include <gtkmm/combobox.h>
 #include <gtkmm/liststore.h>
-#include <gtkmm/scrolledwindow.h>
 #include <gtkmm/table.h>
+#include <gtkmm/treemodel.h>
+#include <gtkmm/treeview.h>
 
 #include "ingen/client/BlockModel.hpp"
 #include "ingen/types.hpp"
+#include "ingen/Store.hpp"
 
 #include "Window.hpp"
 
@@ -58,69 +62,45 @@ public:
 private:
 	/** Record of a node (row in the table) */
 	struct Record {
-		Record(const Atom& v, Gtk::Alignment* vw, int r, Gtk::CheckButton* cb)
-			: value(v), value_widget(vw), row(r), present_button(cb)
+		Record(Gtk::Alignment* vw, int r, Gtk::CheckButton* cb)
+			: row(r)
 		{}
-		Atom              value;
-		Gtk::Alignment*   value_widget;
 		int               row;
-		Gtk::CheckButton* present_button;
 	};
-
-	struct ComboColumns : public Gtk::TreeModel::ColumnRecord {
-		ComboColumns() {
-			add(label_col);
-			add(uri_col);
-		}
-		Gtk::TreeModelColumn<Glib::ustring> label_col;
-		Gtk::TreeModelColumn<Glib::ustring> uri_col;
-	};
-
-	void add_node(const URI& key, const Atom& value);
-	void change_node(const URI& key, const Atom& value);
-	void remove_node(const URI& key, const Atom& value);
-	void on_change(const URI& key);
 
 	bool datatype_supported(const std::set<URI>& types,
 	                        URI*                 widget_type);
 
 	bool class_supported(const std::set<URI>& types);
 
-	Gtk::Widget* create_value_widget(const URI&  key,
-	                                 const char* type_uri,
-	                                 const Atom& value = Atom());
-
-	Atom get_value(LV2_URID type, Gtk::Widget* value_widget);
-
-	void reset();
 	void on_show() override;
 
-	std::string active_key() const;
-
-	void key_changed();
-	void add_clicked();
-	void cancel_clicked();
-	void apply_clicked();
 	void ok_clicked();
+
+  class ModelColumns : public Gtk::TreeModel::ColumnRecord
+  {
+  public:
+    ModelColumns()
+    {
+      add(_col_id);
+      add(_col_name);
+    }
+
+    Gtk::TreeModelColumn<unsigned int>  _col_id;
+    Gtk::TreeModelColumn<Glib::ustring> _col_name;
+  };
 
 	typedef std::map<URI, Record> Records;
 	Records _records;
 
 	SPtr<const client::ObjectModel> _model;
-	ComboColumns                    _combo_columns;
-	Glib::RefPtr<Gtk::ListStore>    _key_store;
-	sigc::connection                _node_connection;
-	sigc::connection                _node_removed_connection;
+	Glib::RefPtr<Gtk::ListStore>    _node_store;
 	Gtk::VBox*                      _vbox;
-	Gtk::ScrolledWindow*            _scrolledwindow;
-	Gtk::Table*                     _table;
-	Gtk::ComboBox*                  _key_combo;
-	LV2_URID                        _value_type;
-	Gtk::Bin*                       _value_bin;
-	Gtk::Button*                    _add_button;
-	Gtk::Button*                    _cancel_button;
-	Gtk::Button*                    _apply_button;
 	Gtk::Button*                    _ok_button;
+  Gtk::TreeView*                  _tree_view;
+  ModelColumns                    _model_columns;
+  std::vector<std::string>        _node_instances; 
+  int                             _node_num = 1; 
 };
 
 } // namespace gui

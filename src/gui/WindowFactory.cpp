@@ -55,7 +55,7 @@ WindowFactory::WindowFactory(App& app)
 	WidgetFactory::get_widget_derived("rename_win", _rename_win);
 
 	if (!(_load_plugin_win && _load_graph_win && _new_subgraph_win
-	      && _properties_win && && nodelist_win && _rename_win)) {
+	      && _properties_win && _nodelist_win && _rename_win)) {
 		throw std::runtime_error("failed to load window widgets\n");
 	}
 
